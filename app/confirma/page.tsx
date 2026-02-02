@@ -219,9 +219,19 @@ export default function ConfirmaPresencaPage() {
                     <input
                         ref={inputRef}
                         type="text"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
                         value={busca}
                         onChange={(e) => {
                             setBusca(e.target.value);
+                            setShowSugestoes(true);
+                            if (convidadoSelecionado) setConvidadoSelecionado(null);
+                        }}
+                        onInput={(e) => {
+                            const target = e.target as HTMLInputElement;
+                            setBusca(target.value);
                             setShowSugestoes(true);
                             if (convidadoSelecionado) setConvidadoSelecionado(null);
                         }}
@@ -232,11 +242,13 @@ export default function ConfirmaPresencaPage() {
                             width: '100%',
                             padding: '1rem',
                             fontFamily: 'Poppins, sans-serif',
-                            fontSize: '1rem',
+                            fontSize: '16px',
                             border: '1px solid #e0e0e0',
                             borderRadius: '0 12px 0 12px',
                             outline: 'none',
-                            background: '#fafafa'
+                            background: '#fafafa',
+                            WebkitAppearance: 'none',
+                            appearance: 'none'
                         }}
                     />
 
@@ -258,7 +270,12 @@ export default function ConfirmaPresencaPage() {
                             {sugestoes.map((c, i) => (
                                 <button
                                     key={i}
+                                    type="button"
                                     onClick={() => selecionarConvidado(c)}
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        selecionarConvidado(c);
+                                    }}
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem 1rem',
@@ -269,7 +286,8 @@ export default function ConfirmaPresencaPage() {
                                         background: 'transparent',
                                         border: 'none',
                                         borderBottom: i < sugestoes.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        WebkitTapHighlightColor: 'transparent'
                                     }}
                                 >
                                     {c.nome}
