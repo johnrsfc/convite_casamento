@@ -5,102 +5,379 @@ import Link from 'next/link';
 import { useState, Suspense } from 'react';
 
 // Lista de presentes (mesma da página principal)
-const presentes: Record<number, string> = {
-    1: 'Jantar Romântico',
-    2: 'Cesta de Café da Manhã',
-    3: 'Dia no Spa',
-    4: 'Kit Churrasco',
-    5: 'Lua de Mel',
-    6: 'Utensílios de Cozinha',
+const presentes: Record<number, { nome: string; valor: number }> = {
+    1: { nome: 'Jantar Romântico', valor: 150 },
+    2: { nome: 'Cesta de Café da Manhã', valor: 100 },
+    3: { nome: 'Dia no Spa', valor: 250 },
+    4: { nome: 'Kit Churrasco', valor: 200 },
+    5: { nome: 'Lua de Mel', valor: 500 },
+    6: { nome: 'Utensílios de Cozinha', valor: 150 },
 };
+
+interface PixData {
+    qrCode: string;
+    qrCodeText: string;
+}
 
 function CheckoutContent() {
     const searchParams = useSearchParams();
     const id = searchParams.get('id');
-    const valorSugerido = searchParams.get('valor');
+    const valorParam = searchParams.get('valor');
+    const nomeParam = searchParams.get('nome');
 
-    const [valorCustom, setValorCustom] = useState(valorSugerido || '100');
+    const presenteFromList = id ? presentes[parseInt(id)] : null;
+    const presente = presenteFromList || { nome: nomeParam || 'Presente', valor: parseInt(valorParam || '100') };
+    const valorSugerido = valorParam || presente.valor.toString();
+
+    const [valorCustom, setValorCustom] = useState(valorSugerido);
+    const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'CREDIT_CARD'>('PIX');
     const [loading, setLoading] = useState(false);
+    const [etapa, setEtapa] = useState<'selecao' | 'dados' | 'pix' | 'sucesso'>('selecao');
+    const [pixData, setPixData] = useState<PixData | null>(null);
+    const [copiado, setCopiado] = useState(false);
 
-    const presenteNome = id ? presentes[parseInt(id)] : 'Presente';
+    // Dados do pagador
+    const [nome, setNome] = useState('');
+    const [email, setEmail] = useState('');
+    const [cpf, setCpf] = useState('');
 
-    const handlePresentear = () => {
-        setLoading(true);
+    // Dados do cartão
+    const [cartaoNumero, setCartaoNumero] = useState('');
+    const [cartaoNome, setCartaoNome] = useState('');
+    const [cartaoValidade, setCartaoValidade] = useState('');
+    const [cartaoCvv, setCartaoCvv] = useState('');
 
-        // TODO: Integrar com API do PagSeguro
-        // Por enquanto, redireciona para o link de pagamento do PagSeguro
-        // Você pode criar um link de pagamento no painel do PagSeguro e colocar aqui
+    const [erro, setErro] = useState('');
 
-        // Exemplo de URL do PagSeguro (substituir pela sua):
-        const pagSeguroUrl = `https://pagseguro.uol.com.br/checkout/v2/payment.html`;
-
-        // Simula redirecionamento (substituir por integração real)
-        setTimeout(() => {
-            alert(`Redirecionando para pagamento de R$ ${valorCustom},00\n\nPara integrar com PagSeguro:\n1. Crie uma conta no PagSeguro\n2. Gere um link de pagamento\n3. Substitua a URL no código`);
-            setLoading(false);
-        }, 1000);
+    const formatarCPF = (valor: string) => {
+        const numeros = valor.replace(/\D/g, '');
+        return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4').slice(0, 14);
     };
 
-    return (
-        <main className="checkout-page">
-            <div className="checkout-container">
-                {/* Header */}
-                <header className="checkout-header">
-                    <Link href="/presentes" className="checkout-back">
-                        ← Voltar
+    const formatarCartao = (valor: string) => {
+        const numeros = valor.replace(/\D/g, '');
+        return numeros.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4').slice(0, 19);
+    };
+
+    const formatarValidade = (valor: string) => {
+        const numeros = valor.replace(/\D/g, '');
+        if (numeros.length >= 2) {
+            return numeros.slice(0, 2) + '/' + numeros.slice(2, 4);
+        }
+        return numeros;
+    };
+
+    const handleContinuar = () => {
+        if (parseInt(valorCustom) < 10) {
+            setErro('Valor mínimo é R$ 10');
+            return;
+        }
+        setErro('');
+        setEtapa('dados');
+    };
+
+    const handlePagar = async () => {
+        if (!nome || !email || !cpf) {
+            setErro('Preencha todos os campos');
+            return;
+        }
+
+        if (formaPagamento === 'CREDIT_CARD' && (!cartaoNumero || !cartaoNome || !cartaoValidade || !cartaoCvv)) {
+            setErro('Preencha todos os dados do cartão');
+            return;
+        }
+
+        setErro('');
+        setLoading(true);
+
+        try {
+            const response = await fetch('/api/pagamento', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    presenteNome: presente.nome,
+                    presenteValor: parseInt(valorCustom),
+                    pagadorNome: nome,
+                    pagadorEmail: email,
+                    pagadorCpf: cpf,
+                    formaPagamento,
+                    ...(formaPagamento === 'CREDIT_CARD' && {
+                        cartao: {
+                            numero: cartaoNumero,
+                            nome: cartaoNome,
+                            validade: cartaoValidade,
+                            cvv: cartaoCvv
+                        }
+                    })
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                setErro(data.error || 'Erro ao processar pagamento');
+                setLoading(false);
+                return;
+            }
+
+            if (formaPagamento === 'PIX' && data.pix) {
+                setPixData(data.pix);
+                setEtapa('pix');
+            } else if (formaPagamento === 'CREDIT_CARD') {
+                setEtapa('sucesso');
+            }
+        } catch (error) {
+            setErro('Erro de conexão. Tente novamente.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const copiarPix = () => {
+        if (pixData?.qrCodeText) {
+            navigator.clipboard.writeText(pixData.qrCodeText);
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 3000);
+        }
+    };
+
+    // Estilos comuns
+    const inputStyle = {
+        width: '100%',
+        padding: '0.875rem 1rem',
+        fontFamily: 'Poppins, sans-serif',
+        fontSize: '16px',
+        border: '1px solid #e0e0e0',
+        borderRadius: '0 8px 0 8px',
+        outline: 'none',
+        background: '#fafafa'
+    };
+
+    const labelStyle = {
+        fontFamily: 'Poppins, sans-serif',
+        fontSize: '0.7rem',
+        color: '#666',
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.1em',
+        marginBottom: '0.5rem',
+        display: 'block'
+    };
+
+    // Tela de sucesso
+    if (etapa === 'sucesso') {
+        return (
+            <main style={{ minHeight: '100vh', background: '#fff', padding: '2rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center', maxWidth: '360px' }}>
+                    <div style={{ width: '80px', height: '80px', background: '#b8956e', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', fontSize: '2.5rem', color: '#fff' }}>✓</div>
+                    <h1 style={{ fontFamily: 'Great Vibes, cursive', fontSize: '2.5rem', color: '#2c2c2c', marginBottom: '1rem' }}>Obrigado!</h1>
+                    <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.9rem', color: '#666', marginBottom: '2rem', lineHeight: 1.6 }}>
+                        Seu presente foi registrado com sucesso! Larissa & Jonathan agradecem muito por fazer parte deste momento especial.
+                    </p>
+                    <Link href="/" style={{ display: 'inline-block', fontFamily: 'Poppins, sans-serif', fontSize: '0.85rem', color: '#666', textDecoration: 'none', padding: '0.75rem 2rem', border: '1px solid #ddd', borderRadius: '0 12px 0 12px' }}>
+                        ← Voltar ao Convite
                     </Link>
-                    <h1 className="checkout-title">Presentear</h1>
-                </header>
+                </div>
+            </main>
+        );
+    }
 
-                {/* Card do presente */}
-                <div className="checkout-card">
-                    <h2 className="checkout-presente-nome">{presenteNome}</h2>
-                    <p className="checkout-label">Valor sugerido: R$ {valorSugerido},00</p>
+    // Tela do PIX
+    if (etapa === 'pix' && pixData) {
+        return (
+            <main style={{ minHeight: '100vh', background: '#fff', padding: '1.5rem' }}>
+                <div style={{ maxWidth: '430px', margin: '0 auto' }}>
+                    <header style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                        <h1 style={{ fontFamily: 'Great Vibes, cursive', fontSize: '2rem', color: '#2c2c2c' }}>Pagamento PIX</h1>
+                        <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.8rem', color: '#999' }}>Escaneie o QR Code ou copie o código</p>
+                    </header>
 
-                    {/* Seleção de valor */}
-                    <div className="checkout-valor-section">
-                        <label className="checkout-label">Escolha o valor que deseja presentear:</label>
-                        <div className="checkout-valor-options">
-                            {['50', '100', '150', '200', '300', '500'].map((valor) => (
-                                <button
-                                    key={valor}
-                                    className={`checkout-valor-btn ${valorCustom === valor ? 'active' : ''}`}
-                                    onClick={() => setValorCustom(valor)}
-                                >
-                                    R$ {valor}
-                                </button>
-                            ))}
-                        </div>
+                    <div style={{ background: '#fafafa', padding: '1.5rem', borderRadius: '0 16px 0 16px', textAlign: 'center' }}>
+                        <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '1.5rem', fontWeight: 600, color: '#b8956e', marginBottom: '1rem' }}>
+                            R$ {valorCustom},00
+                        </p>
 
-                        {/* Valor personalizado */}
-                        <div className="checkout-custom-valor">
-                            <label className="checkout-label">Ou digite outro valor:</label>
-                            <div className="checkout-input-wrapper">
-                                <span>R$</span>
-                                <input
-                                    type="number"
-                                    value={valorCustom}
-                                    onChange={(e) => setValorCustom(e.target.value)}
-                                    min="10"
-                                    className="checkout-input"
-                                />
-                            </div>
+                        {pixData.qrCode && (
+                            <img
+                                src={`data:image/png;base64,${pixData.qrCode}`}
+                                alt="QR Code PIX"
+                                style={{ width: '200px', height: '200px', margin: '0 auto 1rem', borderRadius: '8px' }}
+                            />
+                        )}
+
+                        <button
+                            onClick={copiarPix}
+                            style={{
+                                width: '100%',
+                                padding: '1rem',
+                                fontFamily: 'Poppins, sans-serif',
+                                fontSize: '0.9rem',
+                                fontWeight: 600,
+                                color: '#fff',
+                                background: copiado ? '#4CAF50' : '#b8956e',
+                                border: 'none',
+                                borderRadius: '0 12px 0 12px',
+                                cursor: 'pointer',
+                                marginBottom: '1rem'
+                            }}
+                        >
+                            {copiado ? '✓ Código copiado!' : 'Copiar código PIX'}
+                        </button>
+
+                        <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.75rem', color: '#999', lineHeight: 1.5 }}>
+                            Após o pagamento, o sistema será notificado automaticamente.
+                        </p>
+                    </div>
+
+                    <button onClick={() => setEtapa('sucesso')} style={{ width: '100%', marginTop: '1rem', padding: '1rem', fontFamily: 'Poppins, sans-serif', fontSize: '0.85rem', color: '#666', background: 'transparent', border: '1px solid #ddd', borderRadius: '0 12px 0 12px', cursor: 'pointer' }}>
+                        Já fiz o pagamento
+                    </button>
+                </div>
+            </main>
+        );
+    }
+
+    // Tela de dados
+    if (etapa === 'dados') {
+        return (
+            <main style={{ minHeight: '100vh', background: '#fff', padding: '1.5rem' }}>
+                <div style={{ maxWidth: '430px', margin: '0 auto' }}>
+                    <header style={{ textAlign: 'center', marginBottom: '1.5rem', position: 'relative' }}>
+                        <button onClick={() => setEtapa('selecao')} style={{ position: 'absolute', left: 0, top: 0, fontFamily: 'Poppins, sans-serif', fontSize: '0.85rem', color: '#666', background: 'none', border: 'none', cursor: 'pointer' }}>← Voltar</button>
+                        <h1 style={{ fontFamily: 'Great Vibes, cursive', fontSize: '2rem', color: '#2c2c2c' }}>Seus Dados</h1>
+                        <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.7rem', color: '#27ae60', marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                            Seus dados estão protegidos
+                        </p>
+                    </header>
+
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label style={labelStyle}>Seu nome</label>
+                        <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome completo" style={inputStyle} />
+                    </div>
+
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label style={labelStyle}>E-mail</label>
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" style={inputStyle} />
+                    </div>
+
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={labelStyle}>CPF</label>
+                        <input type="text" value={cpf} onChange={(e) => setCpf(formatarCPF(e.target.value))} placeholder="000.000.000-00" style={inputStyle} maxLength={14} />
+                    </div>
+
+                    {/* Forma de pagamento */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={labelStyle}>Forma de pagamento</label>
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <button onClick={() => setFormaPagamento('PIX')} style={{ flex: 1, padding: '1rem', fontFamily: 'Poppins, sans-serif', fontSize: '0.85rem', fontWeight: 500, color: formaPagamento === 'PIX' ? '#fff' : '#333', background: formaPagamento === 'PIX' ? '#b8956e' : '#f5f5f5', border: 'none', borderRadius: '0 8px 0 8px', cursor: 'pointer' }}>
+                                PIX
+                            </button>
+                            <button onClick={() => setFormaPagamento('CREDIT_CARD')} style={{ flex: 1, padding: '1rem', fontFamily: 'Poppins, sans-serif', fontSize: '0.85rem', fontWeight: 500, color: formaPagamento === 'CREDIT_CARD' ? '#fff' : '#333', background: formaPagamento === 'CREDIT_CARD' ? '#b8956e' : '#f5f5f5', border: 'none', borderRadius: '0 8px 0 8px', cursor: 'pointer' }}>
+                                Cartão
+                            </button>
                         </div>
                     </div>
 
-                    {/* Botão de pagamento */}
-                    <button
-                        className="checkout-submit"
-                        onClick={handlePresentear}
-                        disabled={loading}
-                    >
-                        {loading ? 'Processando...' : `PRESENTEAR R$ ${valorCustom},00`}
+                    {/* Dados do cartão */}
+                    {formaPagamento === 'CREDIT_CARD' && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={labelStyle}>Número do cartão</label>
+                                <input type="text" value={cartaoNumero} onChange={(e) => setCartaoNumero(formatarCartao(e.target.value))} placeholder="0000 0000 0000 0000" style={inputStyle} maxLength={19} />
+                            </div>
+                            <div style={{ marginBottom: '1rem' }}>
+                                <label style={labelStyle}>Nome no cartão</label>
+                                <input type="text" value={cartaoNome} onChange={(e) => setCartaoNome(e.target.value.toUpperCase())} placeholder="NOME COMO ESTÁ NO CARTÃO" style={inputStyle} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={labelStyle}>Validade</label>
+                                    <input type="text" value={cartaoValidade} onChange={(e) => setCartaoValidade(formatarValidade(e.target.value))} placeholder="MM/AA" style={inputStyle} maxLength={5} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={labelStyle}>CVV</label>
+                                    <input type="text" value={cartaoCvv} onChange={(e) => setCartaoCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="123" style={inputStyle} maxLength={4} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {erro && <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.8rem', color: '#e74c3c', marginBottom: '1rem', textAlign: 'center' }}>{erro}</p>}
+
+                    <button onClick={handlePagar} disabled={loading} style={{ width: '100%', padding: '1rem', fontFamily: 'Poppins, sans-serif', fontSize: '0.9rem', fontWeight: 600, color: '#fff', background: loading ? '#ccc' : '#b8956e', border: 'none', borderRadius: '0 12px 0 12px', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                        {loading ? 'Processando...' : `Pagar R$ ${valorCustom},00`}
                     </button>
 
-                    <p className="checkout-info">
-                        Você será redirecionado para o PagSeguro para finalizar o pagamento de forma segura.
-                    </p>
+                    {/* Selo de segurança */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem', padding: '0.75rem', background: '#f8f9fa', borderRadius: '8px' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#27ae60" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <span style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.7rem', color: '#666' }}>
+                            Pagamento seguro via <strong style={{ color: '#27ae60' }}>Asaas</strong>
+                        </span>
+                    </div>
                 </div>
+            </main>
+        );
+    }
+
+    // Tela inicial de seleção de valor
+    return (
+        <main style={{ minHeight: '100vh', background: '#fff', padding: '1.5rem' }}>
+            <div style={{ maxWidth: '430px', margin: '0 auto' }}>
+                <header style={{ textAlign: 'center', marginBottom: '2rem', position: 'relative' }}>
+                    <Link href="/presentes" style={{ position: 'absolute', left: 0, top: 0, fontFamily: 'Poppins, sans-serif', fontSize: '0.85rem', color: '#666', textDecoration: 'none' }}>← Voltar</Link>
+                    <h1 style={{ fontFamily: 'Great Vibes, cursive', fontSize: '2.2rem', color: '#2c2c2c', marginBottom: '0.5rem' }}>Presentear</h1>
+                    <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.85rem', color: '#666' }}>{presente.nome}</p>
+                </header>
+
+                <div style={{ background: '#fafafa', padding: '1.5rem', borderRadius: '0 16px 0 16px', marginBottom: '1.5rem' }}>
+                    <label style={labelStyle}>Valor sugerido: R$ {valorSugerido},00</label>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
+                        {['50', '100', '150', '200', '300', '500'].map((valor) => (
+                            <button
+                                key={valor}
+                                onClick={() => setValorCustom(valor)}
+                                style={{
+                                    padding: '0.75rem',
+                                    fontFamily: 'Poppins, sans-serif',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 500,
+                                    color: valorCustom === valor ? '#fff' : '#333',
+                                    background: valorCustom === valor ? '#b8956e' : '#fff',
+                                    border: valorCustom === valor ? 'none' : '1px solid #ddd',
+                                    borderRadius: '0 8px 0 8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                R$ {valor}
+                            </button>
+                        ))}
+                    </div>
+
+                    <label style={labelStyle}>Ou digite outro valor:</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontFamily: 'Poppins, sans-serif', fontSize: '1rem', color: '#666' }}>R$</span>
+                        <input
+                            type="number"
+                            value={valorCustom}
+                            onChange={(e) => setValorCustom(e.target.value)}
+                            min="10"
+                            style={{ ...inputStyle, flex: 1 }}
+                        />
+                    </div>
+                </div>
+
+                {erro && <p style={{ fontFamily: 'Poppins, sans-serif', fontSize: '0.8rem', color: '#e74c3c', marginBottom: '1rem', textAlign: 'center' }}>{erro}</p>}
+
+                <button onClick={handleContinuar} style={{ width: '100%', padding: '1rem', fontFamily: 'Poppins, sans-serif', fontSize: '0.9rem', fontWeight: 600, color: '#fff', background: '#b8956e', border: 'none', borderRadius: '0 12px 0 12px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                    Continuar
+                </button>
             </div>
         </main>
     );
@@ -108,7 +385,7 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
     return (
-        <Suspense fallback={<div className="checkout-page"><p>Carregando...</p></div>}>
+        <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><p>Carregando...</p></div>}>
             <CheckoutContent />
         </Suspense>
     );
