@@ -240,14 +240,15 @@ export default function ConfirmaPresencaPage() {
                             autoCapitalize="characters"
                             spellCheck={false}
                             value={codigo}
+                            maxLength={6}
                             onChange={(e) => {
-                                setCodigo(e.target.value.toUpperCase());
+                                setCodigo(e.target.value.toUpperCase().slice(0, 6));
                                 setErro('');
                             }}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') validarCodigo();
                             }}
-                            placeholder="Digite o código do seu convite"
+                            placeholder="Ex: ABC123"
                             style={{
                                 ...inputStyle,
                                 textAlign: 'center',
