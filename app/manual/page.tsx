@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import {
     CalendarCheckIcon,
@@ -14,15 +15,23 @@ import {
     BanIcon,
 } from '../components/ManualIcons';
 
-const regras = [
+// Regras com ícone SVG ou imagem PNG
+const regras: { id: number; texto: string; icon?: React.ReactNode; img?: string }[] = [
     { id: 1, texto: 'Confirme Sua Presença', icon: <CalendarCheckIcon /> },
-    { id: 2, texto: 'Traje Esporte Fino', icon: <ShirtIcon /> },
+    { id: 2, texto: 'Trajes Esporte Fino', img: '/manual/traje-esporte-fino.png' },
     { id: 3, texto: 'Convidado Não Convida', icon: <NoInviteIcon /> },
     { id: 4, texto: 'Não Se Atrase, Seja Pontual', icon: <ClockIcon /> },
-    { id: 5, texto: 'Não Leve Decoração Pra Casa', icon: <FlowerIcon /> },
-    { id: 6, texto: 'Branco é a Cor da Noiva', icon: <BanIcon /> },
-    { id: 7, texto: 'Não Compareça de Rosé ou Verde Oliva', icon: <PaletteIcon /> },
-    { id: 8, texto: 'Aproveite Bastante', icon: <HeartIcon /> },
+    { id: 5, texto: 'Não Leve Decoração Pra Casa', img: '/manual/decoracao.png' },
+    { id: 6, texto: 'Branco é a Cor da Noiva', img: '/manual/branco-cor-da-noiva.png' },
+    {
+        id: 7, texto: 'Não Compareça de Rosé ou Verde Oliva', icon: (
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: '40px', height: '20px', borderRadius: '0%', background: '#BC8F8F', border: '2px solid #a87c7c' }} />
+                <div style={{ width: '40px', height: '20px', borderRadius: '0%', background: '#6B8E23', border: '2px solid #556B2F' }} />
+            </div>
+        )
+    },
+    { id: 8, texto: 'Aproveite Bastante', img: '/manual/aproveite-bastante.png' },
     { id: 9, texto: 'Não Atrapalhe os Fotógrafos', icon: <CameraIcon /> },
     { id: 10, texto: 'Não Saia Sem Se Despedir dos Noivos', icon: <WaveIcon /> },
     { id: 11, texto: 'Não Faça Comentários Negativos', icon: <ChatIcon /> },
@@ -90,14 +99,33 @@ export default function ManualPage() {
                                 border: '1px solid #f0f0f0'
                             }}
                         >
-                            <div style={{
-                                width: '42px',
-                                height: '42px',
-                                color: '#b8956e',
-                                marginBottom: '0.5rem'
-                            }}>
-                                {regra.icon}
-                            </div>
+                            {regra.img ? (
+                                <div style={{
+                                    width: '52px',
+                                    height: '52px',
+                                    marginBottom: '0.5rem',
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    flexShrink: 0
+                                }}>
+                                    <Image
+                                        src={regra.img}
+                                        alt={regra.texto}
+                                        width={52}
+                                        height={52}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                </div>
+                            ) : (
+                                <div style={{
+                                    width: '42px',
+                                    height: '42px',
+                                    color: '#b8956e',
+                                    marginBottom: '0.5rem'
+                                }}>
+                                    {regra.icon}
+                                </div>
+                            )}
                             <h3 style={{
                                 fontFamily: 'Poppins, sans-serif',
                                 fontSize: '0.7rem',

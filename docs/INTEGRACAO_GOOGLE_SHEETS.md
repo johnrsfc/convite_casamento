@@ -2,6 +2,10 @@
 
 ## Passo 1: Criar a Planilha
 
+AKfycbzBs3Cfr1j4eOKfNu72Zq7yhxmC9Tzrg1M0IVqrfd5CK_R6CGGG5ZImmzhHVdCfg6dXgA
+
+https://script.google.com/macros/s/AKfycbzBs3Cfr1j4eOKfNu72Zq7yhxmC9Tzrg1M0IVqrfd5CK_R6CGGG5ZImmzhHVdCfg6dXgA/exec
+
 Crie uma planilha no Google Sheets com as seguintes colunas na primeira aba (Lista):
 
 | Nome | MaxAcompanhantes | Acompanhantes | JaConfirmou |

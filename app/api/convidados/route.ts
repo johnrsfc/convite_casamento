@@ -1,49 +1,83 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-// Configura a URL da planilha Google Sheets (publicada como CSV)
-// O usuário deve substituir esta URL pela sua planilha real
-const SHEETS_URL = process.env.GOOGLE_SHEETS_URL || '';
+const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL || '';
 
-// Lista de convidados mockada para desenvolvimento
-// Remova quando integrar com Google Sheets real
+// Mock para desenvolvimento
 const MOCK_CONVIDADOS = [
-  { nome: 'João Silva', maxAcompanhantes: 2, acompanhantes: ['Maria Silva', 'Pedro Silva'] },
-  { nome: 'Ana Santos', maxAcompanhantes: 1, acompanhantes: [] },
-  { nome: 'Carlos Oliveira', maxAcompanhantes: 3, acompanhantes: ['Lucia Oliveira'] },
-  { nome: 'Fernanda Costa', maxAcompanhantes: 0, acompanhantes: [] },
-  { nome: 'Roberto Lima', maxAcompanhantes: 2, acompanhantes: [] },
-  { nome: 'Patricia Ferreira', maxAcompanhantes: 1, acompanhantes: ['Bruno Ferreira'] },
-  { nome: 'Marcos Souza', maxAcompanhantes: 4, acompanhantes: [] },
-  { nome: 'Juliana Almeida', maxAcompanhantes: 1, acompanhantes: [] },
+  { codigo: 'ABC123', nome: 'João Silva', maxAcompanhantes: 2, acompanhantes: ['Maria Silva', 'Pedro Silva'], jaConfirmou: false },
+  { codigo: 'DEF456', nome: 'Ana Santos', maxAcompanhantes: 1, acompanhantes: [], jaConfirmou: false },
+  { codigo: 'GHI789', nome: 'Carlos Oliveira', maxAcompanhantes: 3, acompanhantes: ['Lucia Oliveira'], jaConfirmou: false },
+  { codigo: 'JKL012', nome: 'Fernanda Costa', maxAcompanhantes: 0, acompanhantes: [], jaConfirmou: false },
 ];
 
-export async function GET() {
+// Busca convidado pelo código via Google Apps Script (tempo real, sem cache)
+async function buscarConvidadoPorCodigo(codigo: string) {
+  if (!APPS_SCRIPT_URL) {
+    // Modo dev: usa mock
+    return MOCK_CONVIDADOS.find(c => c.codigo.toUpperCase() === codigo.toUpperCase()) || null;
+  }
+
+  const url = `${APPS_SCRIPT_URL}?action=buscarCodigo&codigo=${encodeURIComponent(codigo)}`;
+  console.log('Buscando convidado via Apps Script:', url);
+
+  const response = await fetch(url, { cache: 'no-store' });
+  const data = await response.json();
+
+  console.log('Resposta Apps Script:', JSON.stringify(data));
+
+  if (data.error || !data.nome) {
+    return null;
+  }
+
+  return {
+    codigo: data.codigo || codigo,
+    nome: data.nome,
+    maxAcompanhantes: data.maxAcompanhantes || 0,
+    acompanhantes: data.acompanhantes || [],
+    jaConfirmou: data.jaConfirmou || false
+  };
+}
+
+// POST - Validar código e retornar dados do convidado
+export async function POST(request: NextRequest) {
   try {
-    // Se tiver URL do Google Sheets configurada, busca de lá
-    if (SHEETS_URL) {
-      const response = await fetch(SHEETS_URL);
-      const csv = await response.text();
-      
-      // Parse CSV simples
-      const linhas = csv.split('\n').slice(1); // Remove header
-      const convidados = linhas.map(linha => {
-        const cols = linha.split(',');
-        return {
-          nome: cols[0]?.trim() || '',
-          maxAcompanhantes: parseInt(cols[1]) || 0,
-          acompanhantes: cols[2] ? cols[2].split(';').map(a => a.trim()) : [],
-          jaConfirmou: cols[3]?.toLowerCase() === 'sim'
-        };
-      }).filter(c => c.nome);
-      
-      return NextResponse.json(convidados);
+    const { codigo } = await request.json();
+
+    if (!codigo || typeof codigo !== 'string') {
+      return NextResponse.json(
+        { error: 'Código é obrigatório' },
+        { status: 400 }
+      );
     }
-    
-    // Retorna dados mockados para desenvolvimento
-    return NextResponse.json(MOCK_CONVIDADOS);
-    
+
+    const codigoLimpo = codigo.trim().toUpperCase();
+    const convidado = await buscarConvidadoPorCodigo(codigoLimpo);
+
+    if (!convidado) {
+      return NextResponse.json(
+        { error: 'Código não encontrado. Verifique seu convite.' },
+        { status: 404 }
+      );
+    }
+
+    if (convidado.jaConfirmou) {
+      return NextResponse.json(
+        { error: 'Este convite já foi confirmado.' },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({
+      nome: convidado.nome,
+      maxAcompanhantes: convidado.maxAcompanhantes,
+      acompanhantes: convidado.acompanhantes
+    });
+
   } catch (error) {
-    console.error('Erro ao buscar convidados:', error);
-    return NextResponse.json([], { status: 500 });
+    console.error('Erro ao validar código:', error);
+    return NextResponse.json(
+      { error: 'Erro ao processar solicitação' },
+      { status: 500 }
+    );
   }
 }

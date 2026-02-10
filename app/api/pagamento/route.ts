@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Configuração via variáveis de ambiente (.env.local)
-// IMPORTANTE: Para produção, defina ASAAS_API_KEY na Vercel (sem $ problemático)
-const SANDBOX_API_KEY = '$aact_prod_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmE5ZWFkN2YyLWY3ZWEtNDE4My1iYjAyLTNmZmIzYTUwMGJiNDo6JGFhY2hfODgwMzYzNzUtYmZhMi00ODQxLWFlMjAtNWVkYTg3OThmODFl';
-const ASAAS_API_KEY = process.env.ASAAS_API_KEY || SANDBOX_API_KEY;
+const ASAAS_API_KEY = process.env.ASAAS_API_KEY || '';
 const ASAAS_ENVIRONMENT = process.env.ASAAS_ENVIRONMENT || 'sandbox';
 const ASAAS_BASE_URL = ASAAS_ENVIRONMENT === 'production' 
   ? 'https://api.asaas.com/v3'
@@ -28,8 +26,10 @@ interface CreatePaymentRequest {
 // Criar ou buscar cliente no Asaas
 async function getOrCreateCustomer(nome: string, email: string, cpf: string) {
   console.log('=== ASAAS DEBUG ===');
-  console.log('API Key:', ASAAS_API_KEY ? 'Presente' : 'AUSENTE');
+  console.log('Environment:', ASAAS_ENVIRONMENT);
   console.log('Base URL:', ASAAS_BASE_URL);
+  console.log('API Key prefix:', ASAAS_API_KEY.substring(0, 20));
+  console.log('API Key length:', ASAAS_API_KEY.length);
   console.log('CPF:', cpf.replace(/\D/g, ''));
   
   // Primeiro tenta buscar cliente existente
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       customer: customerId,
       billingType: formaPagamento,
       value: presenteValor,
-      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Vence em 1 dia
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       description: `Presente de Casamento: ${descricaoLimpa || 'Presente'}`,
       externalReference: `presente_${Date.now()}`
     };

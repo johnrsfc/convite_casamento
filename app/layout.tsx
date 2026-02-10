@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import MusicWrapper from "./components/MusicWrapper";
 
 export const metadata: Metadata = {
   title: "Larissa & Jonathan | Casamento",
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="antialiased">
         {children}
+        <MusicWrapper />
       </body>
     </html>
   );

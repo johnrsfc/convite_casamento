@@ -340,13 +340,29 @@ body {
 .presente-card {
   background: white !important;
   border-radius: 12px !important;
-  padding: 1rem !important;
+  padding: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
-  min-height: 150px !important;
+  min-height: 280px !important;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
   color: #333 !important;
+  overflow: hidden !important;
+}
+
+.presente-img-container {
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+  border-radius: 12px 12px 0 0;
+  flex-shrink: 0;
+}
+
+.presente-img {
+  width: 100% !important;
+  height: 120px !important;
+  object-fit: cover !important;
+  display: block;
 }
 
 .presente-info {
@@ -356,6 +372,7 @@ body {
   justify-content: center;
   align-items: center;
   text-align: center;
+  padding: 0.75rem 0.5rem 0;
 }
 
 .presente-nome {
@@ -368,8 +385,9 @@ body {
 
 .presente-valor {
   font-family: 'Poppins', sans-serif;
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #c4a789;
 }
 
 .presente-hint {
@@ -396,6 +414,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.1rem;
   padding: 0.6rem 1rem;
+  margin: 0 0.5rem 0.75rem;
   border-radius: 6px;
   text-align: center;
   text-decoration: none;

@@ -6,12 +6,21 @@ import { useState, Suspense } from 'react';
 
 // Lista de presentes (mesma da página principal)
 const presentes: Record<number, { nome: string; valor: number }> = {
-    1: { nome: 'Jantar Romântico', valor: 150 },
-    2: { nome: 'Cesta de Café da Manhã', valor: 100 },
-    3: { nome: 'Dia no Spa', valor: 250 },
-    4: { nome: 'Kit Churrasco', valor: 200 },
-    5: { nome: 'Lua de Mel', valor: 500 },
-    6: { nome: 'Utensílios de Cozinha', valor: 150 },
+    1: { nome: 'Massagem relaxante para o noivo depois de ver a conta do casamento', valor: 250 },
+    2: { nome: 'Só pra não dizer que não demos nada', valor: 90 },
+    3: { nome: 'Lixa para o cancanhar do Jhow', valor: 50 },
+    4: { nome: 'Toma aqui seus 50 reais', valor: 50 },
+    5: { nome: 'Jogar o boquê na sua direção', valor: 121.84 },
+    6: { nome: 'Coberto para a noiva estar sempre coberta de razão', valor: 145 },
+    7: { nome: 'Dar pitaco/falar mal da festa', valor: 137 },
+    8: { nome: 'Dose de paciência para a noiva', valor: 100 },
+    9: { nome: 'Cueca sexi para noite de núpcias', valor: 120 },
+    10: { nome: 'Toma aí meu bolsa familia', valor: 137 },
+    11: { nome: 'Taxa para o boquê não cair na sua namorada', valor: 157 },
+    12: { nome: 'Ajude a pagar a lua de mel do casal', valor: 200 },
+    13: { nome: 'Langerie para a noiva usar na lua de mel', valor: 180 },
+    14: { nome: 'Claro que posso pagar esse presente meu marido tem dois empregos', valor: 297 },
+    15: { nome: 'Passeio tranqui de lancha', valor: 350 },
 };
 
 interface PixData {
@@ -96,7 +105,7 @@ function CheckoutContent() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     presenteNome: presente.nome,
-                    presenteValor: parseInt(valorCustom),
+                    presenteValor: parseFloat(valorCustom),
                     pagadorNome: nome,
                     pagadorEmail: email,
                     pagadorCpf: cpf,
@@ -321,7 +330,7 @@ function CheckoutContent() {
                         </span>
                     </div>
                 </div>
-            </main>
+            </main >
         );
     }
 

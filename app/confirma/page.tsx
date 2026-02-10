@@ -1,14 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-
-interface Convidado {
-    nome: string;
-    maxAcompanhantes: number;
-    acompanhantes?: string[];
-    jaConfirmou?: boolean;
-}
 
 interface Acompanhante {
     nome: string;
@@ -16,60 +9,65 @@ interface Acompanhante {
     confirmado: boolean;
 }
 
+interface ConvidadoData {
+    nome: string;
+    maxAcompanhantes: number;
+    acompanhantes: string[];
+}
+
 export default function ConfirmaPresencaPage() {
-    const [busca, setBusca] = useState('');
-    const [convidados, setConvidados] = useState<Convidado[]>([]);
-    const [convidadoSelecionado, setConvidadoSelecionado] = useState<Convidado | null>(null);
+    const [codigo, setCodigo] = useState('');
+    const [convidado, setConvidado] = useState<ConvidadoData | null>(null);
     const [acompanhantes, setAcompanhantes] = useState<Acompanhante[]>([]);
     const [confirmacaoEnviada, setConfirmacaoEnviada] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [loadingConvidados, setLoadingConvidados] = useState(true);
-    const [showSugestoes, setShowSugestoes] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [erro, setErro] = useState('');
 
-    // Carregar lista de convidados do Google Sheets
-    useEffect(() => {
-        async function carregarConvidados() {
-            try {
-                const response = await fetch('/api/convidados');
-                if (response.ok) {
-                    const data = await response.json();
-                    setConvidados(data);
-                }
-            } catch (error) {
-                console.error('Erro ao carregar convidados:', error);
-            } finally {
-                setLoadingConvidados(false);
-            }
+    // Validar código
+    const validarCodigo = async () => {
+        if (!codigo.trim()) {
+            setErro('Digite o código do seu convite');
+            return;
         }
-        carregarConvidados();
-    }, []);
 
-    // Filtrar sugestões
-    const sugestoes = busca.length >= 2
-        ? convidados.filter(c =>
-            c.nome.toLowerCase().includes(busca.toLowerCase()) && !c.jaConfirmou
-        )
-        : [];
+        setErro('');
+        setLoading(true);
 
-    // Selecionar convidado
-    const selecionarConvidado = (convidado: Convidado) => {
-        setConvidadoSelecionado(convidado);
-        setBusca(convidado.nome);
-        setShowSugestoes(false);
-
-        // Preparar acompanhantes
-        const novoAcompanhantes: Acompanhante[] = [];
-        if (convidado.acompanhantes && convidado.acompanhantes.length > 0) {
-            convidado.acompanhantes.forEach(nome => {
-                novoAcompanhantes.push({ nome, idade: '', confirmado: false });
+        try {
+            const response = await fetch('/api/convidados', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo: codigo.trim() })
             });
-        } else {
-            for (let i = 0; i < convidado.maxAcompanhantes; i++) {
-                novoAcompanhantes.push({ nome: '', idade: '', confirmado: false });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                setErro(data.error || 'Código inválido');
+                setConvidado(null);
+                setLoading(false);
+                return;
             }
+
+            setConvidado(data);
+
+            // Preparar acompanhantes
+            const novosAcompanhantes: Acompanhante[] = [];
+            if (data.acompanhantes && data.acompanhantes.length > 0) {
+                data.acompanhantes.forEach((nome: string) => {
+                    novosAcompanhantes.push({ nome, idade: '', confirmado: false });
+                });
+            } else {
+                for (let i = 0; i < data.maxAcompanhantes; i++) {
+                    novosAcompanhantes.push({ nome: '', idade: '', confirmado: false });
+                }
+            }
+            setAcompanhantes(novosAcompanhantes);
+        } catch {
+            setErro('Erro de conexão. Tente novamente.');
+        } finally {
+            setLoading(false);
         }
-        setAcompanhantes(novoAcompanhantes);
     };
 
     // Atualizar acompanhante
@@ -81,7 +79,7 @@ export default function ConfirmaPresencaPage() {
 
     // Enviar confirmação
     const enviarConfirmacao = async () => {
-        if (!convidadoSelecionado) return;
+        if (!convidado) return;
 
         setLoading(true);
         try {
@@ -89,16 +87,19 @@ export default function ConfirmaPresencaPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    convidadoPrincipal: convidadoSelecionado.nome,
+                    codigo: codigo.trim(),
+                    convidadoPrincipal: convidado.nome,
                     acompanhantes: acompanhantes.filter(a => a.confirmado)
                 })
             });
 
             if (response.ok) {
                 setConfirmacaoEnviada(true);
+            } else {
+                setErro('Erro ao enviar confirmação. Tente novamente.');
             }
-        } catch (error) {
-            console.error('Erro ao confirmar:', error);
+        } catch {
+            setErro('Erro de conexão. Tente novamente.');
         } finally {
             setLoading(false);
         }
@@ -168,6 +169,29 @@ export default function ConfirmaPresencaPage() {
         );
     }
 
+    const inputStyle: React.CSSProperties = {
+        width: '100%',
+        padding: '1rem',
+        fontFamily: 'Poppins, sans-serif',
+        fontSize: '16px',
+        border: '1px solid #e0e0e0',
+        borderRadius: '0 12px 0 12px',
+        outline: 'none',
+        background: '#fafafa',
+        WebkitAppearance: 'none',
+        appearance: 'none' as const
+    };
+
+    const labelStyle: React.CSSProperties = {
+        fontFamily: 'Poppins, sans-serif',
+        fontSize: '0.75rem',
+        color: '#666',
+        display: 'block',
+        marginBottom: '0.5rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.1em'
+    };
+
     return (
         <main style={{
             minHeight: '100vh',
@@ -205,206 +229,223 @@ export default function ConfirmaPresencaPage() {
                     }}>18 de Abril de 2026 • Mansão O Casarão</p>
                 </header>
 
-                {/* Campo de busca */}
-                <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                    <label style={{
-                        fontFamily: 'Poppins, sans-serif',
-                        fontSize: '0.75rem',
-                        color: '#666',
-                        display: 'block',
-                        marginBottom: '0.5rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em'
-                    }}>Busque seu nome</label>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        autoComplete="off"
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        spellCheck={false}
-                        value={busca}
-                        onChange={(e) => {
-                            setBusca(e.target.value);
-                            setShowSugestoes(true);
-                            if (convidadoSelecionado) setConvidadoSelecionado(null);
-                        }}
-                        onInput={(e) => {
-                            const target = e.target as HTMLInputElement;
-                            setBusca(target.value);
-                            setShowSugestoes(true);
-                            if (convidadoSelecionado) setConvidadoSelecionado(null);
-                        }}
-                        onFocus={() => setShowSugestoes(true)}
-                        placeholder={loadingConvidados ? "Carregando..." : "Digite seu nome..."}
-                        disabled={loadingConvidados}
-                        style={{
-                            width: '100%',
-                            padding: '1rem',
-                            fontFamily: 'Poppins, sans-serif',
-                            fontSize: '16px',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '0 12px 0 12px',
-                            outline: 'none',
-                            background: '#fafafa',
-                            WebkitAppearance: 'none',
-                            appearance: 'none'
-                        }}
-                    />
-
-                    {/* Sugestões */}
-                    {showSugestoes && sugestoes.length > 0 && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            right: 0,
-                            background: '#fff',
-                            border: '1px solid #e0e0e0',
-                            borderRadius: '0 0 12px 12px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                            zIndex: 10,
-                            maxHeight: '200px',
-                            overflowY: 'auto'
-                        }}>
-                            {sugestoes.map((c, i) => (
-                                <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => selecionarConvidado(c)}
-                                    onTouchEnd={(e) => {
-                                        e.preventDefault();
-                                        selecionarConvidado(c);
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: '0.75rem 1rem',
-                                        textAlign: 'left',
-                                        fontFamily: 'Poppins, sans-serif',
-                                        fontSize: '0.9rem',
-                                        color: '#333',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        borderBottom: i < sugestoes.length - 1 ? '1px solid #f0f0f0' : 'none',
-                                        cursor: 'pointer',
-                                        WebkitTapHighlightColor: 'transparent'
-                                    }}
-                                >
-                                    {c.nome}
-                                    {c.maxAcompanhantes > 0 && (
-                                        <span style={{ color: '#999', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
-                                            (+{c.maxAcompanhantes} acompanhante{c.maxAcompanhantes > 1 ? 's' : ''})
-                                        </span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Acompanhantes */}
-                {convidadoSelecionado && acompanhantes.length > 0 && (
+                {/* Campo de código */}
+                {!convidado && (
                     <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{
-                            fontFamily: 'Poppins, sans-serif',
-                            fontSize: '0.75rem',
-                            color: '#666',
-                            display: 'block',
-                            marginBottom: '0.75rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.1em'
-                        }}>Acompanhantes (selecione quem vai)</label>
+                        <label style={labelStyle}>Código do Convite</label>
+                        <input
+                            type="text"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="characters"
+                            spellCheck={false}
+                            value={codigo}
+                            onChange={(e) => {
+                                setCodigo(e.target.value.toUpperCase());
+                                setErro('');
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') validarCodigo();
+                            }}
+                            placeholder="Digite o código do seu convite"
+                            style={{
+                                ...inputStyle,
+                                textAlign: 'center',
+                                fontSize: '1.2rem',
+                                letterSpacing: '0.2em',
+                                fontWeight: 600
+                            }}
+                        />
 
-                        {acompanhantes.map((ac, i) => (
-                            <div key={i} style={{
-                                background: '#fafafa',
+                        {erro && (
+                            <p style={{
+                                fontFamily: 'Poppins, sans-serif',
+                                fontSize: '0.8rem',
+                                color: '#e74c3c',
+                                marginTop: '0.75rem',
+                                textAlign: 'center'
+                            }}>{erro}</p>
+                        )}
+
+                        <button
+                            onClick={validarCodigo}
+                            disabled={loading}
+                            style={{
+                                width: '100%',
                                 padding: '1rem',
-                                borderRadius: '0 12px 0 12px',
-                                marginBottom: '0.75rem',
-                                border: ac.confirmado ? '1px solid #b8956e' : '1px solid #e0e0e0'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={ac.confirmado}
-                                        onChange={(e) => atualizarAcompanhante(i, 'confirmado', e.target.checked)}
-                                        style={{
-                                            width: '20px',
-                                            height: '20px',
-                                            accentColor: '#b8956e'
-                                        }}
-                                    />
-                                    <div style={{ flex: 1 }}>
-                                        {ac.nome ? (
-                                            <span style={{
-                                                fontFamily: 'Poppins, sans-serif',
-                                                fontSize: '0.9rem',
-                                                color: '#333'
-                                            }}>{ac.nome}</span>
-                                        ) : (
-                                            <input
-                                                type="text"
-                                                placeholder={`Acompanhante ${i + 1}`}
-                                                value={ac.nome}
-                                                onChange={(e) => atualizarAcompanhante(i, 'nome', e.target.value)}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '0.5rem',
-                                                    fontFamily: 'Poppins, sans-serif',
-                                                    fontSize: '0.85rem',
-                                                    border: '1px solid #e0e0e0',
-                                                    borderRadius: '6px',
-                                                    outline: 'none'
-                                                }}
-                                            />
-                                        )}
-                                    </div>
-                                    {ac.confirmado && (
-                                        <input
-                                            type="number"
-                                            placeholder="Idade"
-                                            value={ac.idade}
-                                            onChange={(e) => atualizarAcompanhante(i, 'idade', e.target.value)}
-                                            style={{
-                                                width: '60px',
-                                                padding: '0.5rem',
-                                                fontFamily: 'Poppins, sans-serif',
-                                                fontSize: '0.85rem',
-                                                border: '1px solid #e0e0e0',
-                                                borderRadius: '6px',
-                                                textAlign: 'center',
-                                                outline: 'none'
-                                            }}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                                marginTop: '1rem',
+                                fontFamily: 'Poppins, sans-serif',
+                                fontSize: '0.9rem',
+                                fontWeight: 600,
+                                color: '#fff',
+                                background: loading ? '#ccc' : '#b8956e',
+                                border: 'none',
+                                borderRadius: '0 16px 0 16px',
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.1em'
+                            }}
+                        >
+                            {loading ? 'Validando...' : 'Validar Código'}
+                        </button>
                     </div>
                 )}
 
-                {/* Botão Confirmar */}
-                {convidadoSelecionado && (
-                    <button
-                        onClick={enviarConfirmacao}
-                        disabled={loading}
-                        style={{
-                            width: '100%',
-                            padding: '1rem',
-                            fontFamily: 'Poppins, sans-serif',
-                            fontSize: '0.9rem',
-                            fontWeight: 600,
-                            color: '#fff',
-                            background: loading ? '#ccc' : '#b8956e',
-                            border: 'none',
-                            borderRadius: '0 16px 0 16px',
-                            cursor: loading ? 'not-allowed' : 'pointer',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.1em'
-                        }}
-                    >
-                        {loading ? 'Enviando...' : 'Confirmar Presença'}
-                    </button>
+                {/* Dados do convidado (após validação) */}
+                {convidado && (
+                    <>
+                        {/* Nome do convidado */}
+                        <div style={{
+                            textAlign: 'center',
+                            marginBottom: '1.5rem',
+                            padding: '1.5rem',
+                            background: '#faf8f5',
+                            borderRadius: '0 16px 0 16px'
+                        }}>
+                            <p style={{
+                                fontFamily: 'Poppins, sans-serif',
+                                fontSize: '0.7rem',
+                                color: '#999',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.1em',
+                                marginBottom: '0.5rem'
+                            }}>Convidado</p>
+                            <p style={{
+                                fontFamily: 'Great Vibes, cursive',
+                                fontSize: '1.8rem',
+                                color: '#2c2c2c'
+                            }}>{convidado.nome}</p>
+                        </div>
+
+                        {/* Acompanhantes */}
+                        {acompanhantes.length > 0 && (
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={labelStyle}>Acompanhantes (selecione quem vai)</label>
+
+                                {acompanhantes.map((ac, i) => (
+                                    <div key={i} style={{
+                                        background: '#fafafa',
+                                        padding: '1rem',
+                                        borderRadius: '0 12px 0 12px',
+                                        marginBottom: '0.75rem',
+                                        border: ac.confirmado ? '1px solid #b8956e' : '1px solid #e0e0e0'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={ac.confirmado}
+                                                onChange={(e) => atualizarAcompanhante(i, 'confirmado', e.target.checked)}
+                                                style={{
+                                                    width: '20px',
+                                                    height: '20px',
+                                                    accentColor: '#b8956e'
+                                                }}
+                                            />
+                                            <div style={{ flex: 1 }}>
+                                                {ac.nome ? (
+                                                    <span style={{
+                                                        fontFamily: 'Poppins, sans-serif',
+                                                        fontSize: '0.9rem',
+                                                        color: '#333'
+                                                    }}>{ac.nome}</span>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        placeholder={`Acompanhante ${i + 1}`}
+                                                        value={ac.nome}
+                                                        onChange={(e) => atualizarAcompanhante(i, 'nome', e.target.value)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '0.5rem',
+                                                            fontFamily: 'Poppins, sans-serif',
+                                                            fontSize: '0.85rem',
+                                                            border: '1px solid #e0e0e0',
+                                                            borderRadius: '6px',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                            {ac.confirmado && (
+                                                <input
+                                                    type="number"
+                                                    placeholder="Idade"
+                                                    value={ac.idade}
+                                                    onChange={(e) => atualizarAcompanhante(i, 'idade', e.target.value)}
+                                                    style={{
+                                                        width: '60px',
+                                                        padding: '0.5rem',
+                                                        fontFamily: 'Poppins, sans-serif',
+                                                        fontSize: '0.85rem',
+                                                        border: '1px solid #e0e0e0',
+                                                        borderRadius: '6px',
+                                                        textAlign: 'center',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {erro && (
+                            <p style={{
+                                fontFamily: 'Poppins, sans-serif',
+                                fontSize: '0.8rem',
+                                color: '#e74c3c',
+                                marginBottom: '1rem',
+                                textAlign: 'center'
+                            }}>{erro}</p>
+                        )}
+
+                        {/* Botão Confirmar */}
+                        <button
+                            onClick={enviarConfirmacao}
+                            disabled={loading}
+                            style={{
+                                width: '100%',
+                                padding: '1rem',
+                                fontFamily: 'Poppins, sans-serif',
+                                fontSize: '0.9rem',
+                                fontWeight: 600,
+                                color: '#fff',
+                                background: loading ? '#ccc' : '#b8956e',
+                                border: 'none',
+                                borderRadius: '0 16px 0 16px',
+                                cursor: loading ? 'not-allowed' : 'pointer',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.1em'
+                            }}
+                        >
+                            {loading ? 'Enviando...' : 'Confirmar Presença'}
+                        </button>
+
+                        {/* Botão voltar para trocar código */}
+                        <button
+                            onClick={() => {
+                                setConvidado(null);
+                                setCodigo('');
+                                setAcompanhantes([]);
+                                setErro('');
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem',
+                                marginTop: '0.75rem',
+                                fontFamily: 'Poppins, sans-serif',
+                                fontSize: '0.8rem',
+                                color: '#999',
+                                background: 'transparent',
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '0 12px 0 12px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Usar outro código
+                        </button>
+                    </>
                 )}
 
                 {/* Info */}
@@ -416,7 +457,7 @@ export default function ConfirmaPresencaPage() {
                     marginTop: '1.5rem',
                     lineHeight: 1.5
                 }}>
-                    Caso não encontre seu nome, entre em contato com os noivos.
+                    O código está no seu convite. Em caso de dúvida, entre em contato com os noivos.
                 </p>
             </div>
         </main>

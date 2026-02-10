@@ -149,8 +149,8 @@ export default function Home() {
           <span className="footer-note">★ UTILIZE OS BOTÕES ACIMA PARA NAVEGAR</span>
         </div>
 
-        {/* Imagem final */}
-        <footer className="footer-section">
+        {/* Imagem final com versículo sobreposto */}
+        <footer className="footer-section" style={{ position: 'relative' }}>
           <div className="footer-gradient-top" />
           <Image
             src="/img02.png"
@@ -160,6 +160,41 @@ export default function Home() {
             className="footer-bg-image"
             style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
           />
+          {/* Versículo sobreposto à imagem */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            zIndex: 2,
+            padding: '2.5rem 1.5rem',
+            textAlign: 'center',
+          }}>
+            <p style={{
+              fontFamily: 'Great Vibes, cursive',
+              fontSize: '1.8rem',
+              color: '#000',
+              lineHeight: 1.5,
+              maxWidth: '340px',
+            }}>
+              &quot;Sim, coisas grandiosas fez o Senhor por nós, por isso estamos alegres&quot;
+            </p>
+            <span style={{
+              fontFamily: 'Poppins, sans-serif',
+              fontSize: '0.85rem',
+              color: '#000',
+              marginTop: '0.5rem',
+              display: 'block',
+              letterSpacing: '0.15rem',
+            }}>
+              Salmos 126:3
+            </span>
+          </div>
         </footer>
       </main>
     </AnimationWrapper>
