@@ -24,14 +24,7 @@ interface CreatePaymentRequest {
 }
 
 // Criar ou buscar cliente no Asaas
-async function getOrCreateCustomer(nome: string, email: string, cpf: string) {
-  console.log('=== ASAAS DEBUG ===');
-  console.log('Environment:', ASAAS_ENVIRONMENT);
-  console.log('Base URL:', ASAAS_BASE_URL);
-  console.log('API Key prefix:', ASAAS_API_KEY.substring(0, 20));
-  console.log('API Key length:', ASAAS_API_KEY.length);
-  console.log('CPF:', cpf.replace(/\D/g, ''));
-  
+async function getOrCreateCustomer(nome: string, email: string, cpf: string): Promise<{ id?: string; error?: unknown }> {
   // Primeiro tenta buscar cliente existente
   const searchResponse = await fetch(`${ASAAS_BASE_URL}/customers?cpfCnpj=${cpf.replace(/\D/g, '')}`, {
     headers: {
@@ -41,21 +34,16 @@ async function getOrCreateCustomer(nome: string, email: string, cpf: string) {
   });
   
   const searchData = await searchResponse.json();
-  console.log('Busca cliente:', JSON.stringify(searchData));
+  
+  if (!searchResponse.ok) {
+    return { error: { step: 'busca_cliente', status: searchResponse.status, response: searchData } };
+  }
   
   if (searchData.data && searchData.data.length > 0) {
-    console.log('Cliente encontrado:', searchData.data[0].id);
-    return searchData.data[0].id;
+    return { id: searchData.data[0].id };
   }
   
   // Se não existe, cria novo cliente
-  const createBody = {
-    name: nome,
-    email: email,
-    cpfCnpj: cpf.replace(/\D/g, '')
-  };
-  console.log('Criando cliente:', JSON.stringify(createBody));
-  
   const createResponse = await fetch(`${ASAAS_BASE_URL}/customers`, {
     method: 'POST',
     headers: {
@@ -63,18 +51,20 @@ async function getOrCreateCustomer(nome: string, email: string, cpf: string) {
       'content-type': 'application/json',
       'access_token': ASAAS_API_KEY
     },
-    body: JSON.stringify(createBody)
+    body: JSON.stringify({
+      name: nome,
+      email: email,
+      cpfCnpj: cpf.replace(/\D/g, '')
+    })
   });
   
   const createData = await createResponse.json();
-  console.log('Resposta criação:', JSON.stringify(createData));
   
-  if (createData.errors) {
-    console.error('Erros Asaas:', createData.errors);
-    return null;
+  if (!createResponse.ok || createData.errors) {
+    return { error: { step: 'criacao_cliente', status: createResponse.status, response: createData } };
   }
   
-  return createData.id;
+  return { id: createData.id };
 }
 
 export async function POST(request: NextRequest) {
@@ -91,12 +81,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar ou buscar cliente
-    const customerId = await getOrCreateCustomer(pagadorNome, pagadorEmail, pagadorCpf);
+    const customerResult = await getOrCreateCustomer(pagadorNome, pagadorEmail, pagadorCpf);
 
-    if (!customerId) {
+    if (!customerResult.id) {
       return NextResponse.json(
         { 
           error: 'Erro ao criar cliente no Asaas',
+          asaasError: customerResult.error,
           debug: {
             hasApiKey: !!ASAAS_API_KEY,
             apiKeyLength: ASAAS_API_KEY.length,
@@ -108,6 +99,7 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+    const customerId = customerResult.id;
 
     // Criar cobrança
     // Remover emojis e caracteres especiais da descrição
