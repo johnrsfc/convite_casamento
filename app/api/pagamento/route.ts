@@ -95,7 +95,16 @@ export async function POST(request: NextRequest) {
 
     if (!customerId) {
       return NextResponse.json(
-        { error: 'Erro ao criar cliente no Asaas' },
+        { 
+          error: 'Erro ao criar cliente no Asaas',
+          debug: {
+            hasApiKey: !!ASAAS_API_KEY,
+            apiKeyLength: ASAAS_API_KEY.length,
+            apiKeyPrefix: ASAAS_API_KEY.substring(0, 15),
+            environment: ASAAS_ENVIRONMENT,
+            baseUrl: ASAAS_BASE_URL
+          }
+        },
         { status: 500 }
       );
     }
@@ -211,8 +220,19 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Erro ao criar pagamento:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Erro interno ao processar pagamento' },
+      { 
+        error: 'Erro interno ao processar pagamento',
+        details: message,
+        debug: {
+          hasApiKey: !!ASAAS_API_KEY,
+          apiKeyLength: ASAAS_API_KEY.length,
+          apiKeyPrefix: ASAAS_API_KEY.substring(0, 15),
+          environment: ASAAS_ENVIRONMENT,
+          baseUrl: ASAAS_BASE_URL
+        }
+      },
       { status: 500 }
     );
   }
